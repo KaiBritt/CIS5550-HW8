@@ -19,7 +19,7 @@ public class HW8Test extends GenericTest {
 
     System.out.println("Make sure the student's solution is in a file called 'crawler.jar' in the local directory.");
     System.out.println("Then, in separate terminal windows, please run the following commands:");
-    System.out.println("  java -cp lib/kvs.jar:lib/webserver.jar cis5550.kvs.Coordinator 8000");
+    System.out.println  ("  java -cp lib/kvs.jar:lib/webserver.jar cis5550.kvs.Coordinator 8000");
     System.out.println("  rm -rf worker1; java -cp lib/kvs.jar:lib/webserver.jar cis5550.kvs.Worker 8001 worker1 localhost:8000");
     System.out.println("  java -cp lib/kvs.jar:lib/webserver.jar:lib/flame.jar cis5550.flame.Coordinator 9000 localhost:8000");
     System.out.println("  java -cp lib/kvs.jar:lib/webserver.jar:lib/flame.jar cis5550.flame.Worker 9001 localhost:9000");

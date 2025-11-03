@@ -3,6 +3,10 @@ package cis5550.tools;
 import java.util.*;
 import java.net.*;
 import java.io.*;
+// 0 is protocol
+// 1 is everything before port
+// 2 is empty if no port else port
+// 3 is the rest of the url
 
 public class URLParser {
   public static String[] parseURL(String url) {
