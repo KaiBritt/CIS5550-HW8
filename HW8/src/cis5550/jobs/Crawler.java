@@ -8,9 +8,6 @@ import cis5550.tools.URLParser;
 
 import javax.swing.plaf.basic.BasicInternalFrameTitlePane;
 import java.io.*;
-import java.nio.Buffer;
-import java.time.LocalTime;
-import java.lang.reflect.Array;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -22,7 +19,7 @@ import java.util.regex.Pattern;
 public class Crawler {
     final static int SEED_LIMIT = 1;
     final static String USER_AGENT = "cis5550-crawler";
-
+    static int crawlDelay = 1 * 1000;
     private static List<String> extractTags(String html){
         ArrayList<String> taglist = new ArrayList<>();
         boolean openTag  = false;
@@ -70,13 +67,17 @@ public class Crawler {
         if (parsedUrl[3].indexOf("#") > 0){
             parsedUrl[3] = parsedUrl[3].substring(0, parsedUrl[3].indexOf("#"));
         }
-        ArrayDeque<String> path = normalizePath(hostPath, parsedUrl[3]);
-        String normalizedPath =  "/" + String.join("/",path);
+        String normalizedPath = "";
 
+        if (hostPath != null) {// is not a seed url
+            ArrayDeque<String> path = normalizePath(hostPath, parsedUrl[3]);
+            normalizedPath = "/" + String.join("/", path);
+        }
         if (parsedUrl[0] == null) {
             return hostUrl + normalizedPath;
-        } else if (parsedUrl[1] != null && parsedUrl[2]  != null) {
-            return parsedUrl[0] + "::/" + parsedUrl[1] + ":" + parsedUrl[2] + normalizedPath;
+        } else if (parsedUrl[1] != null) {
+            if (parsedUrl[2] == null){  parsedUrl[2] =  parsedUrl[1].equals("https") ? "443" : "80";}
+            return parsedUrl[0] + "://" + parsedUrl[1] + ":" + parsedUrl[2] + normalizedPath;
         }
         else{
             System.out.println("failed to normalize url check this case: " + url);
@@ -128,7 +129,10 @@ public class Crawler {
             for (String arg : args) ctx.output(arg);
         }
 
-        FlameRDD urlQueue = ctx.parallelize(Arrays.asList(args));
+        List<String> normalizedSeedUrls = Arrays.stream(args)
+                .map(url -> normalizeUrl(url, null, null)).toList();
+
+        FlameRDD urlQueue = ctx.parallelize(normalizedSeedUrls);
         int iteration = 0;
         // will eventually endup in a while
         while (true) {
@@ -153,18 +157,32 @@ public class Crawler {
                 if (badProtocol || badExtension) {
                     return new ArrayList<String>();
                 }
+                // reading robots.txt entry
 
+
+                // check rate limit
+                byte[] lastAccess = ctx.getKVS().get("hosts",url.getHost(),"lastAccess");
+                byte[] crawlDelayByte = ctx.getKVS().get("hosts",url.getHost(),"lastAccess");
+                double crawlDelay = crawlDelayByte  != null ? Double.parseDouble(new String(crawlDelayByte)) : 1;
+
+                if ( lastAccess != null && System.currentTimeMillis()  - Long.parseLong(new String(lastAccess))  < crawlDelay){
+                    return List.of(s);
+                }
 
                 HttpURLConnection headConn = (HttpURLConnection) url.openConnection();
                 headConn.setRequestProperty("User-Agent", USER_AGENT);
                 headConn.setRequestMethod("HEAD");
-
                 String contentLength = null;
                 String contentType =  null;
                 String location =  null;
                 Row pageRow = new Row(Hasher.hash(s));
+                pageRow.put("url", s);
+
                 headConn.connect();
+                ctx.getKVS().put("hosts", url.getHost(), "lastAccess", ""+System.currentTimeMillis());
+
                 int resCode = headConn.getResponseCode();
+                pageRow.put("responseCode", ""+resCode);
                 System.out.println("starting to enter " + resCode );
                 if ( resCode == 200 || (resCode > 300  &&  resCode <309)) {
                     contentLength = headConn.getHeaderField("content-length");
@@ -185,6 +203,7 @@ public class Crawler {
                 if ((resCode > 300  &&  resCode <309) && location != null){
                     System.out.println("Exiting redirect " + resCode );
 
+                    ctx.getKVS().putRow("pt-crawl", pageRow);
                     return Collections.singleton(normalizeUrl(location, hostUrl, hostPath));
                 }
 
@@ -199,7 +218,6 @@ public class Crawler {
                     try (InputStream in = conn.getInputStream()) {
                         pageData = in.readAllBytes();
                     }
-                    pageRow.put("url", s);
                     pageRow.put("page", pageData);
                     ctx.getKVS().putRow("pt-crawl", pageRow);
 
