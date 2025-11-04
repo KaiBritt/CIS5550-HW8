@@ -120,7 +120,7 @@ public class Crawler {
     private static List<String> robotComplience (List<String> urls, RobotsTxt robot){
         List<String> complientUrls = new ArrayList<>();
         for( String url : urls){
-            if (robot.validPath(url))
+            if (robot.validPath( URI.create(url).getPath()))
                 complientUrls.add(url);
         }
         return  complientUrls;
@@ -211,7 +211,7 @@ public class Crawler {
 
                 int resCode = headConn.getResponseCode();
                 pageRow.put("responseCode", ""+resCode);
-                System.out.println("starting to enter " + resCode );
+                System.out.println("starting to enter " + resCode + " " + hostUrl + url.getPath() );
                 if ( resCode == 200 || (resCode > 300  &&  resCode <309)) {
                     contentLength = headConn.getHeaderField("content-length");
                     pageRow.put("length", contentLength);
@@ -250,7 +250,6 @@ public class Crawler {
 
                     List<String> tags = extractTags(new String(pageData, StandardCharsets.UTF_8));
                     List<String> urls = extractUrls(tags); // for UTF-8 encoding));
-
                     List<String> normalizedUrls = normalizeUrls(urls, hostUrl, hostPath);
                     List<String> robotComplientUrls = robotComplience(normalizedUrls, robots);
                     for (String u : robotComplientUrls) System.out.println(u);
