@@ -4,9 +4,9 @@ import cis5550.flame.FlameContext;
 import cis5550.flame.FlameRDD;
 import cis5550.kvs.Row;
 import cis5550.tools.Hasher;
+import cis5550.tools.RobotsTxt;
 import cis5550.tools.URLParser;
 
-import javax.swing.plaf.basic.BasicInternalFrameTitlePane;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -19,8 +19,7 @@ import java.util.regex.Pattern;
 public class Crawler {
     final static int SEED_LIMIT = 1;
     final static String USER_AGENT = "cis5550-crawler";
-    static int crawlDelay = 1 * 1000;
-    private static List<String> extractTags(String html){
+  private static List<String> extractTags(String html){
         ArrayList<String> taglist = new ArrayList<>();
         boolean openTag  = false;
         StringBuilder curTag = new StringBuilder();
@@ -118,6 +117,14 @@ public class Crawler {
         return normalizedUrls;
     }
 
+    private static List<String> robotComplience (List<String> urls, RobotsTxt robot){
+        List<String> complientUrls = new ArrayList<>();
+        for( String url : urls){
+            if (robot.validPath(url))
+                complientUrls.add(url);
+        }
+        return  complientUrls;
+    }
 
     public static  void run(FlameContext ctx, String[] args) throws Exception {
         if (args.length > SEED_LIMIT || args.length == 0){ // only allowing one seed
@@ -148,7 +155,10 @@ public class Crawler {
                 // checking protocols
                 String protocol = url.getProtocol().toLowerCase();
                 String path = url.getPath().toLowerCase();
+                int hostPort = url.getPort() == -1 ? url.getDefaultPort() : url.getPort();
 
+                String hostName = url.getHost();
+                String hostUrl = protocol + "://" + hostName + ":" + hostPort;
                 List<String> badExts = Arrays.asList(".jpg", ".jpeg", ".gif", ".png", ".txt");
 
                 boolean badProtocol = !(protocol.equals("http") || protocol.equals("https"));
@@ -159,12 +169,30 @@ public class Crawler {
                 }
                 // reading robots.txt entry
 
-
+                RobotsTxt robots = null;
+                byte[] robotCol = ctx.getKVS().get("hosts", url.getHost(),"robots");
+                if (robotCol == null || !new String(robotCol).equals("no robots")){
+                robots = RobotsTxt.deserialize(robotCol);
                 // check rate limit
-                byte[] lastAccess = ctx.getKVS().get("hosts",url.getHost(),"lastAccess");
-                byte[] crawlDelayByte = ctx.getKVS().get("hosts",url.getHost(),"lastAccess");
-                double crawlDelay = crawlDelayByte  != null ? Double.parseDouble(new String(crawlDelayByte)) : 1;
+                    if (robots == null ) {      // never access so download robots
+                        robots = new RobotsTxt(URI.create(hostUrl + "/robots.txt").toURL() , USER_AGENT);
+                        if (robots.loadRobots()){
+                            ctx.getKVS().put("hosts",  url.getHost(), "robots", RobotsTxt.serialize(robots));
+                            ctx.getKVS().put("hosts",  url.getHost(), "lastAccess", ""+0);
 
+                        }
+                        else{
+                            ctx.getKVS().put("hosts",  url.getHost(), "robots", "no robots");
+                        }
+                    }
+                }
+                byte[] lastAccess = ctx.getKVS().get("hosts", url.getHost(),"lastAccess");
+                long crawlDelay;
+                if (robots != null ){
+                    crawlDelay = (long) (Double.parseDouble(robots.getCrawlDelay()) * 1000) ;
+                } else {
+                    crawlDelay = 1000;
+                }
                 if ( lastAccess != null && System.currentTimeMillis()  - Long.parseLong(new String(lastAccess))  < crawlDelay){
                     return List.of(s);
                 }
@@ -196,9 +224,7 @@ public class Crawler {
                     return new ArrayList<String>();
                 }
 
-                int hostPort = url.getPort() == -1 ? url.getDefaultPort() : url.getPort();
-                String hostName = url.getHost();
-                String hostUrl = protocol + "://" + hostName + ":" + hostPort;
+
                 String hostPath = url.getPath();
                 if ((resCode > 300  &&  resCode <309) && location != null){
                     System.out.println("Exiting redirect " + resCode );
@@ -226,8 +252,9 @@ public class Crawler {
                     List<String> urls = extractUrls(tags); // for UTF-8 encoding));
 
                     List<String> normalizedUrls = normalizeUrls(urls, hostUrl, hostPath);
-                    for (String u : normalizedUrls) System.out.println(u);
-                    return normalizedUrls;
+                    List<String> robotComplientUrls = robotComplience(normalizedUrls, robots);
+                    for (String u : robotComplientUrls) System.out.println(u);
+                    return robotComplientUrls;
                 }
                 else {
                     ctx.getKVS().putRow("pt-crawl", pageRow);
