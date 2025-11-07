@@ -46,10 +46,8 @@ public class Crawler {
     private static List<String> extractUrls(List<String> tagList) {
         List<String> urls = new ArrayList<>();
         Pattern hrefPattern = Pattern.compile("href\\s*=\\s*['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE);
-
         for (String tag : tagList) {
-            if (!tag.trim().toLowerCase().startsWith("a")) continue;
-
+              if (!tag.strip().toLowerCase().startsWith("a")) continue;
             Matcher m = hrefPattern.matcher(tag);
             if (m.find()) {
                 urls.add(m.group(1)); // the URL inside quotes
@@ -125,6 +123,17 @@ public class Crawler {
         return  complientUrls;
     }
 
+    public static  String replaceWildCards(String stringToConvert){
+        if (!stringToConvert.endsWith("*")){
+            stringToConvert += "$";
+        }
+        return "^"+stringToConvert.replace("*","[^/]*").replace("/","\\/");
+    }
+
+    public static boolean urlBlackListed(String test,String urlToTest ){
+        return Pattern.matches(replaceWildCards(test),urlToTest);
+    }
+
     public static  void run(FlameContext ctx, String[] args) throws Exception {
         if (args.length > SEED_LIMIT || args.length == 0){ // only allowing one seed
             ctx.output("No seed was passed");
@@ -134,6 +143,7 @@ public class Crawler {
             ctx.output("Starting crawl from:\n");
             for (String arg : args) ctx.output(arg);
         }
+
         System.out.println(args[0]  + " " +  normalizeUrl(args[0], null, null));
         List<String> normalizedSeedUrls = Arrays.stream(args)
                 .map(url -> normalizeUrl(url, null, null)).toList();
@@ -141,12 +151,25 @@ public class Crawler {
         FlameRDD urlQueue = ctx.parallelize(normalizedSeedUrls);
         int iteration = 0;
         // will eventually endup in a while
+
+
+
         while (true) {
             urlQueue = urlQueue.flatMap(s -> {
-                // check if url has been seen
+
+                // check if url is on the blacklist
+                for (Iterator<Row> it = ctx.getKVS().scan("blacklist"); it.hasNext(); ) {
+                    Row row = it.next();
+                    String pattern = row.get("pattern");
+                    if (pattern != null && urlBlackListed(pattern, s)){
+                        return new ArrayList<String>();
+                    }
+                }
+
                 if (ctx.getKVS().existsRow("pt-crawl", Hasher.hash(s))) {
                     return new ArrayList<String>();
                 }
+
 
                 // check and wrtie last time host has been pinged
 
@@ -173,7 +196,7 @@ public class Crawler {
                 if (robotCol == null || !new String(robotCol).equals("no robots")){
                 robots = RobotsTxt.deserialize(robotCol);
                 // check rate limit
-                    if (robots == null ) {      // never access so download robots
+                    if (robots == null ) {      // never accessed host so download robots
                         robots = new RobotsTxt(URI.create(hostUrl + "/robots.txt").toURL() , USER_AGENT);
                         if (robots.loadRobots()){
                             ctx.getKVS().put("hosts",  url.getHost(), "robots", RobotsTxt.serialize(robots));
@@ -245,11 +268,26 @@ public class Crawler {
                     try (InputStream in = conn.getInputStream()) {
                         pageData = in.readAllBytes();
                     }
+                    String pageDataStr = new String(pageData, StandardCharsets.UTF_8);
+                    String hashedPageData = Hasher.hash(pageDataStr);
+
+                    Row seenTestRow = ctx.getKVS().getRow("pt-content-seen", hashedPageData);
+                    if (seenTestRow != null) {
+                        pageRow.put("canonicalURL", seenTestRow.get("url"));
+                        ctx.getKVS().putRow("pt-crawl", pageRow);
+                        System.out.println("contentSeen " + s + " " + seenTestRow.get("url"));
+                        return new ArrayList<String>();
+                    }
+
+
                     pageRow.put("page", pageData);
                     ctx.getKVS().putRow("pt-crawl", pageRow);
+                    Row contentSeenRow = new Row(hashedPageData);
+                    contentSeenRow.put("url", s);
+                    ctx.getKVS().putRow("pt-content-seen", contentSeenRow);
 
 
-                    List<String> tags = extractTags(new String(pageData, StandardCharsets.UTF_8));
+                    List<String> tags = extractTags(pageDataStr);
                     List<String> urls = extractUrls(tags); // for UTF-8 encoding));
                     List<String> normalizedUrls = normalizeUrls(urls, hostUrl, hostPath);
                     List<String> robotComplientUrls = robotComplience(normalizedUrls, robots);
