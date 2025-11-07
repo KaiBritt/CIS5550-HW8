@@ -38,8 +38,7 @@ public class testing {
         String test = "http*://*/cgi-bin/*";
 
         System.out.println(replaceWildCards("*.pdf"));
-        System.out.println(
-        System.out.println(Hasher.hash("http://advanced.crawltest.401.cis5550.net:80/c8Rhi6R/xy5zJMx9GaVr5ddue.html"));
+        System.out.println(Hasher.hash("http://advanced.crawltest.401.cis5550.net:80/c8Rhi6R/xy5zJMx9GaVr5ddue.html")   );
 
     }
 }
