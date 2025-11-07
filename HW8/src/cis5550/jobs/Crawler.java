@@ -68,10 +68,9 @@ public class Crawler {
         }
         String normalizedPath = "";
 
-        if (hostPath != null) {// is not a seed url
-            ArrayDeque<String> path = normalizePath(hostPath, parsedUrl[3]);
-            normalizedPath = "/" + String.join("/", path);
-        }
+        ArrayDeque<String> path = normalizePath(hostPath, parsedUrl[3]);
+        normalizedPath = "/" + String.join("/", path);
+
         if (parsedUrl[0] == null) {
             return hostUrl + normalizedPath;
         } else if (parsedUrl[1] != null) {
@@ -90,7 +89,7 @@ public class Crawler {
         ArrayDeque<String> path = new ArrayDeque<>();
 
         // relative path
-        if (newPath.startsWith(".")) {
+        if (newPath.startsWith(".") && hostPath != null) {
             for (String hostPiece : hostPath.split("/")) {
                 if (hostPiece.isEmpty()) continue;
                 path.addLast(hostPiece);
@@ -135,7 +134,7 @@ public class Crawler {
             ctx.output("Starting crawl from:\n");
             for (String arg : args) ctx.output(arg);
         }
-
+        System.out.println(args[0]  + " " +  normalizeUrl(args[0], null, null));
         List<String> normalizedSeedUrls = Arrays.stream(args)
                 .map(url -> normalizeUrl(url, null, null)).toList();
 
@@ -208,8 +207,9 @@ public class Crawler {
 
                 headConn.connect();
                 ctx.getKVS().put("hosts", url.getHost(), "lastAccess", ""+System.currentTimeMillis());
-
+                HttpURLConnection.setFollowRedirects(false);
                 int resCode = headConn.getResponseCode();
+                System.out.println(resCode);
                 pageRow.put("responseCode", ""+resCode);
                 System.out.println("starting to enter " + resCode + " " + hostUrl + url.getPath() );
                 if ( resCode == 200 || (resCode > 300  &&  resCode <309)) {
@@ -221,13 +221,14 @@ public class Crawler {
 
                     location =  headConn.getHeaderField("location");
                 } else {
+                    ctx.getKVS().putRow("pt-crawl", pageRow);
                     return new ArrayList<String>();
                 }
 
 
                 String hostPath = url.getPath();
-                if ((resCode > 300  &&  resCode <309) && location != null){
-                    System.out.println("Exiting redirect " + resCode );
+                if ((resCode > 300  &&  resCode < 309) && location != null){
+                    System.out.println("Exiting redirect " + resCode + " points to " + normalizeUrl(location, hostUrl, hostPath) );
 
                     ctx.getKVS().putRow("pt-crawl", pageRow);
                     return Collections.singleton(normalizeUrl(location, hostUrl, hostPath));

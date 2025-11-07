@@ -185,6 +185,8 @@ public class HW8Test extends GenericTest {
 //promptUser = false;  [needed for autograder]
 
     if ((args.length == 0) || args[0].equals("all") || args[0].equals("auto") || (args.length>1) && (args[1].equals("all") || args[1].equals("auto"))) {
+      tests.add("run-advanced");
+      tests.add("advanced");
     }
 
     for (int i=0; i<args.length; i++)
