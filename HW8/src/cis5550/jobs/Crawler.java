@@ -157,14 +157,14 @@ public class Crawler {
         while (true) {
             urlQueue = urlQueue.flatMap(s -> {
 
-                // check if url is on the blacklist
-                for (Iterator<Row> it = ctx.getKVS().scan("blacklist"); it.hasNext(); ) {
-                    Row row = it.next();
-                    String pattern = row.get("pattern");
-                    if (pattern != null && urlBlackListed(pattern, s)){
-                        return new ArrayList<String>();
-                    }
-                }
+//                // check if url is on the blacklist
+//                for (Iterator<Row> it = ctx.getKVS().scan("blacklist"); it.hasNext(); ) {
+//                    Row row = it.next();
+//                    String pattern = row.get("pattern");
+//                    if (pattern != null && urlBlackListed(pattern, s)){
+//                        return new ArrayList<String>();
+//                    }
+//                }
 
                 if (ctx.getKVS().existsRow("pt-crawl", Hasher.hash(s))) {
                     return new ArrayList<String>();
@@ -302,6 +302,7 @@ public class Crawler {
 
             if (urlQueue.count() == 0) break;
         }
+        System.out.println("Finished crawl");
 
 
     }
