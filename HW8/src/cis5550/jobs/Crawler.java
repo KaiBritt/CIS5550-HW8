@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 public class Crawler {
     final static int SEED_LIMIT = 1;
     final static String USER_AGENT = "cis5550-crawler";
-  private static List<String> extractTags(String html){
+      private static List<String> extractTags(String html){
         ArrayList<String> taglist = new ArrayList<>();
         boolean openTag  = false;
         StringBuilder curTag = new StringBuilder();
@@ -89,7 +89,7 @@ public class Crawler {
         ArrayDeque<String> path = new ArrayDeque<>();
 
         // relative path
-        if (newPath.startsWith(".") && hostPath != null) {
+        if (!newPath.startsWith("/") && hostPath != null) {
             for (String hostPiece : hostPath.split("/")) {
                 if (hostPiece.isEmpty()) continue;
                 path.addLast(hostPiece);
