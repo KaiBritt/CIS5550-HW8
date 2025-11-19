@@ -62,16 +62,16 @@ public class RobotsTxt implements Serializable {
     }
 
     public boolean validPath(String path){
-       for (String bannedPath : disallow){
-           if (path.startsWith(bannedPath)){
-               return false;
-           }
-       }
         for (String allowedPath : allow){
             if (path.startsWith(allowedPath)){
                 return true;
             }
         }
+       for (String bannedPath : disallow){
+           if (path.startsWith(bannedPath)){
+               return false;
+           }
+       }
         return false;
     }
 
